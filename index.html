@@ -215,6 +215,7 @@
       let score = 0;
       let combo = 0;
       let oxygen = 100;
+      let elapsed = 0;
       let spawnTimer = 0;
       let dangerTimer = 0;
 
@@ -398,21 +399,24 @@
 
       function spawnShrimp() {
         const side = Math.random() > 0.5 ? 1 : -1;
+        const difficulty = Math.min(3.2, 1 + elapsed / 1500 + score / 650);
+        const speed = rand(0.52, 0.9) * difficulty;
         shrimps.push({
           x: side > 0 ? W + 20 : -50,
           y: rand(42, 126),
-          vx: side > 0 ? rand(-0.8, -0.45) : rand(0.45, 0.8),
+          vx: side > 0 ? -speed : speed,
           phase: rand(0, 100),
           scared: 0,
         });
       }
 
       function spawnDanger() {
+        const difficulty = Math.min(3, 1 + elapsed / 1800 + score / 900);
         dangers.push({
           x: rand(40, W - 40),
           y: rand(46, 130),
-          vx: rand(-0.24, 0.24),
-          vy: rand(-0.18, 0.18),
+          vx: rand(-0.22, 0.22) * difficulty,
+          vy: rand(-0.18, 0.18) * difficulty,
           spin: rand(0, Math.PI * 2),
         });
       }
@@ -445,7 +449,9 @@
 
       function update(dt) {
         tick += dt;
-        oxygen = clamp(oxygen - dt * 0.04, 0, 100);
+        elapsed += dt;
+        const difficulty = Math.min(3.5, 1 + elapsed / 1350 + score / 700);
+        oxygen = clamp(oxygen - dt * (0.045 + difficulty * 0.018), 0, 100);
         if (oxygen <= 0) endGame();
 
         const ax = (keys.has("ArrowRight") || keys.has("d") ? 1 : 0) - (keys.has("ArrowLeft") || keys.has("a") ? 1 : 0);
@@ -464,11 +470,11 @@
         dangerTimer -= dt;
         if (spawnTimer <= 0) {
           spawnShrimp();
-          spawnTimer = Math.max(25, 66 - score * 0.08);
+          spawnTimer = Math.max(14, 62 - difficulty * 10 - score * 0.035);
         }
-        if (dangerTimer <= 0 && dangers.length < 4) {
+        if (dangerTimer <= 0 && dangers.length < Math.min(8, 3 + Math.floor(difficulty * 1.5))) {
           spawnDanger();
-          dangerTimer = 130;
+          dangerTimer = Math.max(46, 124 - difficulty * 18);
         }
         if (Math.random() < 0.08) addBubbles(rand(20, W - 20), H - 26, 1);
 
@@ -494,13 +500,17 @@
             shrimps.splice(i, 1);
             combo += 1;
             score += 10 + combo * 2;
-            oxygen = clamp(oxygen + 14, 0, 100);
+            oxygen = clamp(oxygen + 9, 0, 100);
             fish.mouth = 1;
             addSparkles(mouthBox.x + mouthBox.w / 2, mouthBox.y + 8);
             addBubbles(mouthBox.x + mouthBox.w / 2, mouthBox.y + 10, 7);
             continue;
           }
-          if (s.x < -80 || s.x > W + 80) shrimps.splice(i, 1);
+          if (s.x < -80 || s.x > W + 80) {
+            shrimps.splice(i, 1);
+            if (combo > 0) combo = 0;
+            oxygen = clamp(oxygen - 3, 0, 100);
+          }
         }
 
         for (const d of dangers) {
@@ -510,7 +520,7 @@
           if (d.x < 18 || d.x > W - 18) d.vx *= -1;
           if (d.y < 34 || d.y > 136) d.vy *= -1;
           if (fish.invincible <= 0 && rectHit(fishBox, { x: d.x - 8, y: d.y - 8, w: 16, h: 16 })) {
-            oxygen = clamp(oxygen - 16, 0, 100);
+            oxygen = clamp(oxygen - 24, 0, 100);
             combo = 0;
             fish.invincible = 60;
             addBubbles(fish.x + 90, fish.y + 30, 12);
@@ -605,6 +615,7 @@
         score = 0;
         combo = 0;
         oxygen = 100;
+        elapsed = 0;
         spawnTimer = 0;
         dangerTimer = 80;
         shrimps.length = 0;
