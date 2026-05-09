@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>兰寿吃小虾</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+        background: #10283d;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 20% 8%, rgba(135, 236, 232, 0.22), transparent 24%),
+          linear-gradient(180deg, #173a57 0%, #10283d 68%, #0b1b2c 100%);
+        overflow: hidden;
+      }
+
+      .shell {
+        width: min(100vw, 1180px);
+        padding: 18px;
+      }
+
+      .hud {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        color: #eafff8;
+        text-shadow: 0 3px 0 #10283d;
+        user-select: none;
+      }
+
+      .title {
+        font-size: clamp(18px, 3vw, 28px);
+        font-weight: 900;
+      }
+
+      .stats {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      .chip {
+        min-width: 108px;
+        border: 3px solid #163047;
+        background: #236a83;
+        box-shadow:
+          inset 0 3px 0 rgba(255, 255, 255, 0.25),
+          0 5px 0 #0d2236;
+        padding: 8px 10px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .controls {
+        justify-self: end;
+        display: flex;
+        gap: 8px;
+      }
+
+      button {
+        border: 3px solid #163047;
+        background: #ffd35b;
+        color: #512a18;
+        box-shadow:
+          inset 0 3px 0 rgba(255, 255, 255, 0.4),
+          0 5px 0 #a85d24;
+        padding: 8px 12px;
+        font: inherit;
+        font-weight: 900;
+        cursor: pointer;
+      }
+
+      button:active {
+        transform: translateY(3px);
+        box-shadow:
+          inset 0 2px 0 rgba(255, 255, 255, 0.3),
+          0 2px 0 #a85d24;
+      }
+
+      .stage {
+        position: relative;
+        aspect-ratio: 16 / 9;
+        width: 100%;
+        border: 5px solid #163047;
+        background: #37b8c9;
+        box-shadow:
+          inset 0 0 0 5px rgba(255, 255, 255, 0.12),
+          0 16px 0 #0b1b2c,
+          0 24px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        image-rendering: pixelated;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(10, 31, 48, 0.42);
+        color: #fffdf0;
+        text-align: center;
+      }
+
+      .panel {
+        border: 5px solid #163047;
+        background: #236a83;
+        box-shadow:
+          inset 0 5px 0 rgba(255, 255, 255, 0.22),
+          0 8px 0 #0d2236;
+        padding: 22px;
+        max-width: 520px;
+      }
+
+      .panel h1 {
+        margin: 0 0 10px;
+        font-size: clamp(24px, 5vw, 42px);
+      }
+
+      .panel p {
+        margin: 8px 0;
+        line-height: 1.55;
+        font-size: 15px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          padding: 10px;
+        }
+
+        .hud {
+          grid-template-columns: 1fr;
+        }
+
+        .stats,
+        .controls {
+          justify-content: start;
+          justify-self: start;
+          flex-wrap: wrap;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hud" aria-label="游戏信息">
+        <div class="title">兰寿吃小虾</div>
+        <div class="stats">
+          <div class="chip">分数 <span id="score">0</span></div>
+          <div class="chip">连吃 <span id="combo">0</span></div>
+          <div class="chip">氧气 <span id="oxygen">100</span></div>
+        </div>
+        <div class="controls">
+          <button id="startBtn" type="button">开始</button>
+          <button id="pauseBtn" type="button">暂停</button>
+        </div>
+      </section>
+
+      <section class="stage">
+        <canvas id="game" width="320" height="180"></canvas>
+        <div id="overlay" class="overlay">
+          <div class="panel">
+            <h1>开饭啦</h1>
+            <p>方向键 / WASD 控制兰寿，吃掉小虾拿分。</p>
+            <p>连续吃会加倍得分，撞到刺球会掉氧气。</p>
+            <button id="overlayStart" type="button">开始游戏</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const canvas = document.querySelector("#game");
+      const ctx = canvas.getContext("2d");
+      const scoreEl = document.querySelector("#score");
+      const comboEl = document.querySelector("#combo");
+      const oxygenEl = document.querySelector("#oxygen");
+      const overlay = document.querySelector("#overlay");
+      const startBtn = document.querySelector("#startBtn");
+      const pauseBtn = document.querySelector("#pauseBtn");
+      const overlayStart = document.querySelector("#overlayStart");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const keys = new Set();
+      let running = false;
+      let paused = false;
+      let last = 0;
+      let tick = 0;
+      let score = 0;
+      let combo = 0;
+      let oxygen = 100;
+      let spawnTimer = 0;
+      let dangerTimer = 0;
+
+      const fish = {
+        x: 76,
+        y: 82,
+        vx: 0,
+        vy: 0,
+        dir: 1,
+        mouth: 0,
+        invincible: 0,
+      };
+
+      const shrimps = [];
+      const dangers = [];
+      const bubbles = [];
+      const particles = [];
+
+      const colors = {
+        ink: "#163047",
+        ink2: "#28516a",
+        water1: "#82e4e7",
+        water2: "#36b8c9",
+        water3: "#14748a",
+        light: "#d6fff5",
+        sand1: "#f5d27b",
+        sand2: "#d6a852",
+        plant1: "#167f5f",
+        plant2: "#3bc887",
+        orange1: "#ffb938",
+        orange2: "#f47b20",
+        orange3: "#d64b19",
+        orange4: "#9f3418",
+        cream: "#fff1b0",
+        shrimp1: "#ffb2a0",
+        shrimp2: "#ff765f",
+        coral: "#ff7f8a",
+        shell: "#fff0c2",
+      };
+
+      const rand = (min, max) => min + Math.random() * (max - min);
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      const rectHit = (a, b) =>
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y;
+
+      function block(x, y, w, h, color, alpha = 1) {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+        ctx.globalAlpha = 1;
+      }
+
+      function drawBlocks(blocks, ox = 0, oy = 0, flip = false, alpha = 1, spriteWidth = 168) {
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (flip) {
+          ctx.translate(ox + spriteWidth, oy);
+          ctx.scale(-1, 1);
+          ox = 0;
+          oy = 0;
+        }
+        for (const b of blocks) block(ox + b.x, oy + b.y, b.w, b.h, b.c);
+        ctx.restore();
+      }
+
+      function fishSprite(mouth, tail) {
+        const t = Math.round(tail);
+        return [
+          { x: 0, y: 20 + t, w: 18, h: 8, c: colors.ink },
+          { x: 4, y: 28 + t, w: 21, h: 9, c: colors.ink },
+          { x: 8, y: 37 + t, w: 14, h: 8, c: colors.ink },
+          { x: 3, y: 22 + t, w: 14, h: 5, c: "#ffd25e" },
+          { x: 8, y: 30 + t, w: 14, h: 6, c: colors.orange1 },
+          { x: 11, y: 39 + t, w: 9, h: 4, c: colors.orange2 },
+          { x: 19, y: 25, w: 8, h: 18, c: colors.ink },
+          { x: 27, y: 19, w: 11, h: 30, c: colors.ink },
+          { x: 38, y: 15, w: 19, h: 38, c: colors.ink },
+          { x: 57, y: 10, w: 45, h: 50, c: colors.ink },
+          { x: 102, y: 6, w: 42, h: 55, c: colors.ink },
+          { x: 144, y: 14, w: 22, h: 41, c: colors.ink },
+          { x: 57, y: 16, w: 41, h: 39, c: colors.orange1 },
+          { x: 98, y: 12, w: 42, h: 44, c: colors.orange2 },
+          { x: 140, y: 20, w: 16, h: 29, c: colors.orange3 },
+          { x: 68, y: 20, w: 23, h: 14, c: colors.cream },
+          { x: 60, y: 18, w: 9, h: 3, c: "#fffdf0" },
+          { x: 76, y: 40, w: 6, h: 4, c: colors.orange2 },
+          { x: 90, y: 34, w: 5, h: 4, c: colors.orange3 },
+          { x: 103, y: 38, w: 7, h: 4, c: "#ffe06e" },
+          { x: 113, y: 5, w: 8, h: 8, c: colors.orange1 },
+          { x: 122, y: 0, w: 8, h: 10, c: colors.orange2 },
+          { x: 132, y: 5, w: 10, h: 10, c: colors.orange3 },
+          { x: 118, y: 26, w: 6, h: 6, c: "#fffdf0" },
+          { x: 122, y: 30, w: 5, h: 5, c: colors.ink },
+          { x: 125, y: 28, w: 2, h: 2, c: "#fffdf0" },
+          { x: 138, y: 35, w: 16 + mouth * 10, h: 8 + mouth * 6, c: colors.ink },
+          { x: 141, y: 37, w: 7 + mouth * 5, h: 4 + mouth * 3, c: "#56211c" },
+          { x: 66, y: 51, w: 22, h: 13, c: colors.ink },
+          { x: 69, y: 52, w: 18, h: 9, c: "#f1672d" },
+          { x: 44, y: 45, w: 18, h: 15, c: colors.orange3 },
+          { x: 46, y: 48, w: 13, h: 9, c: colors.orange1 },
+          { x: 106, y: 52, w: 18, h: 10, c: "#ff796f" },
+        ];
+      }
+
+      function shrimpSprite(frame) {
+        const wiggle = Math.round(Math.sin(frame * 0.25) * 2);
+        return [
+          { x: 5, y: 10, w: 11, h: 8, c: colors.ink },
+          { x: 16, y: 8, w: 17, h: 12, c: colors.ink },
+          { x: 31, y: 11, w: 7, h: 8, c: colors.ink },
+          { x: 8, y: 11, w: 8, h: 5, c: colors.shrimp1 },
+          { x: 16, y: 9, w: 15, h: 9, c: colors.shrimp2 },
+          { x: 18, y: 10, w: 3, h: 8, c: colors.shrimp1 },
+          { x: 25, y: 10, w: 2, h: 8, c: "#d94b48" },
+          { x: 31, y: 12, w: 4, h: 5, c: colors.shrimp1 },
+          { x: 0, y: 11, w: 6, h: 3, c: colors.shrimp2 },
+          { x: 3, y: 17, w: 5, h: 3, c: colors.shrimp2 },
+          { x: 22, y: 19, w: 3, h: 6, c: colors.ink2 },
+          { x: 28, y: 19, w: 3, h: 6, c: colors.ink2 },
+          { x: 34, y: 8, w: 2, h: 2, c: colors.ink },
+          { x: 36, y: 5 + wiggle, w: 8, h: 2, c: colors.shrimp2 },
+          { x: 36, y: 2 + wiggle, w: 11, h: 1, c: colors.shrimp1 },
+        ];
+      }
+
+      function plant(x, base, height, lean, alpha = 1) {
+        for (let i = 0; i < height; i += 8) {
+          block(x, base - i, 5, 8, colors.plant1, alpha);
+          block(x + lean + (i % 16 === 0 ? 4 : -6), base - i + 1, 10, 4, colors.plant2, alpha);
+        }
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, H);
+        gradient.addColorStop(0, colors.water1);
+        gradient.addColorStop(0.5, colors.water2);
+        gradient.addColorStop(1, colors.water3);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, W, H);
+
+        for (let i = 0; i < 10; i++) {
+          block(-20 + Math.sin(tick * 0.015 + i) * 10, 16 + i * 13, 360, 1, i % 2 ? "rgba(22,48,71,0.13)" : "rgba(220,255,245,0.3)");
+        }
+
+        for (let i = 0; i < 20; i++) {
+          block((i * 37 + Math.round(Math.sin(tick * 0.013 + i) * 8)) % W, 12 + ((i * 17) % 120), i % 3 === 0 ? 2 : 1, i % 4 === 0 ? 2 : 1, i % 2 ? "rgba(22,48,71,0.22)" : "rgba(214,255,245,0.56)");
+        }
+
+        plant(55, 151, 25, 1, 0.46);
+        plant(211, 151, 30, -1, 0.46);
+        block(0, 151, W, 29, colors.sand1);
+        block(0, 164, W, 16, colors.sand2);
+
+        block(109, 150, 22, 4, colors.ink2);
+        block(115, 141, 5, 13, colors.coral);
+        block(121, 136, 5, 18, "#ffb35a");
+        block(126, 143, 4, 11, "#ffb35a");
+        block(190, 152, 22, 5, colors.ink2);
+        block(193, 148, 16, 6, colors.shell);
+        block(196, 145, 10, 4, "#fffdf0");
+        block(225, 150, 18, 5, colors.ink2);
+        block(228, 144, 12, 7, "#7b5a32");
+        block(232, 145, 4, 3, "#ffd86a");
+
+        plant(17, 151, 43, 0);
+        plant(33, 151, 29, -2, 0.84);
+        plant(253, 151, 34, 1);
+        plant(276, 151, 52, -2);
+        plant(292, 151, 37, 1, 0.86);
+
+        for (let i = 0; i < 86; i++) {
+          const x = (i * 19 + 7) % W;
+          const y = 154 + ((i * 7) % 19);
+          const c = i % 5 === 0 ? colors.ink2 : i % 3 === 0 ? "#9c814a" : "#ffe29a";
+          block(x, y, 2 + (i % 4), 1 + (i % 2), c);
+        }
+      }
+
+      function spawnShrimp() {
+        const side = Math.random() > 0.5 ? 1 : -1;
+        shrimps.push({
+          x: side > 0 ? W + 20 : -50,
+          y: rand(42, 126),
+          vx: side > 0 ? rand(-0.8, -0.45) : rand(0.45, 0.8),
+          phase: rand(0, 100),
+          scared: 0,
+        });
+      }
+
+      function spawnDanger() {
+        dangers.push({
+          x: rand(40, W - 40),
+          y: rand(46, 130),
+          vx: rand(-0.24, 0.24),
+          vy: rand(-0.18, 0.18),
+          spin: rand(0, Math.PI * 2),
+        });
+      }
+
+      function addBubbles(x, y, count) {
+        for (let i = 0; i < count; i++) {
+          bubbles.push({
+            x: x + rand(-8, 8),
+            y: y + rand(-4, 5),
+            vx: rand(-0.2, 0.2),
+            vy: rand(-0.9, -0.35),
+            life: rand(40, 90),
+            size: rand(2, 5),
+          });
+        }
+      }
+
+      function addSparkles(x, y) {
+        for (let i = 0; i < 12; i++) {
+          particles.push({
+            x,
+            y,
+            vx: rand(-1.4, 1.4),
+            vy: rand(-1.2, 1.0),
+            life: rand(18, 34),
+            c: i % 2 ? colors.shrimp1 : "#fffdf0",
+          });
+        }
+      }
+
+      function update(dt) {
+        tick += dt;
+        oxygen = clamp(oxygen - dt * 0.8, 0, 100);
+        if (oxygen <= 0) endGame();
+
+        const ax = (keys.has("ArrowRight") || keys.has("d") ? 1 : 0) - (keys.has("ArrowLeft") || keys.has("a") ? 1 : 0);
+        const ay = (keys.has("ArrowDown") || keys.has("s") ? 1 : 0) - (keys.has("ArrowUp") || keys.has("w") ? 1 : 0);
+        fish.vx += ax * 0.32;
+        fish.vy += ay * 0.26;
+        fish.vx *= 0.86;
+        fish.vy *= 0.86;
+        fish.x = clamp(fish.x + fish.vx, 4, W - 172);
+        fish.y = clamp(fish.y + fish.vy, 18, H - 88);
+        if (Math.abs(fish.vx) > 0.08) fish.dir = fish.vx > 0 ? 1 : -1;
+        fish.mouth = Math.max(0, fish.mouth - dt * 0.08);
+        fish.invincible = Math.max(0, fish.invincible - dt);
+
+        spawnTimer -= dt;
+        dangerTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnShrimp();
+          spawnTimer = Math.max(25, 66 - score * 0.08);
+        }
+        if (dangerTimer <= 0 && dangers.length < 4) {
+          spawnDanger();
+          dangerTimer = 130;
+        }
+        if (Math.random() < 0.08) addBubbles(rand(20, W - 20), H - 26, 1);
+
+        const mouthBox = fish.dir > 0
+          ? { x: fish.x + 138, y: fish.y + 32, w: 34, h: 24 }
+          : { x: fish.x - 2, y: fish.y + 32, w: 34, h: 24 };
+        const fishBox = { x: fish.x + 34, y: fish.y + 10, w: 118, h: 54 };
+
+        for (let i = shrimps.length - 1; i >= 0; i--) {
+          const s = shrimps[i];
+          const dx = s.x - fish.x;
+          const dy = s.y - fish.y;
+          const dist = Math.hypot(dx, dy);
+          s.scared = Math.max(0, s.scared - dt);
+          if (dist < 82) {
+            s.scared = 24;
+            s.vx += dx > 0 ? 0.025 : -0.025;
+          }
+          s.x += s.vx + (s.scared ? Math.sign(dx || 1) * 0.16 : 0);
+          s.y += Math.sin((tick + s.phase) * 0.08) * 0.35;
+
+          if (rectHit(mouthBox, { x: s.x + 8, y: s.y + 8, w: 30, h: 18 })) {
+            shrimps.splice(i, 1);
+            combo += 1;
+            score += 10 + combo * 2;
+            oxygen = clamp(oxygen + 8, 0, 100);
+            fish.mouth = 1;
+            addSparkles(mouthBox.x + mouthBox.w / 2, mouthBox.y + 8);
+            addBubbles(mouthBox.x + mouthBox.w / 2, mouthBox.y + 10, 7);
+            continue;
+          }
+          if (s.x < -80 || s.x > W + 80) shrimps.splice(i, 1);
+        }
+
+        for (const d of dangers) {
+          d.x += d.vx;
+          d.y += d.vy;
+          d.spin += 0.06;
+          if (d.x < 18 || d.x > W - 18) d.vx *= -1;
+          if (d.y < 34 || d.y > 136) d.vy *= -1;
+          if (fish.invincible <= 0 && rectHit(fishBox, { x: d.x - 8, y: d.y - 8, w: 16, h: 16 })) {
+            oxygen = clamp(oxygen - 22, 0, 100);
+            combo = 0;
+            fish.invincible = 60;
+            addBubbles(fish.x + 90, fish.y + 30, 12);
+          }
+        }
+
+        for (let i = bubbles.length - 1; i >= 0; i--) {
+          const b = bubbles[i];
+          b.x += b.vx + Math.sin((tick + i) * 0.03) * 0.05;
+          b.y += b.vy;
+          b.life -= dt;
+          if (b.life <= 0 || b.y < -8) bubbles.splice(i, 1);
+        }
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.03;
+          p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        scoreEl.textContent = Math.floor(score);
+        comboEl.textContent = combo;
+        oxygenEl.textContent = Math.ceil(oxygen);
+      }
+
+      function drawShrimp(s, index) {
+        const flip = s.vx < 0;
+        if (s.scared) drawBlocks(shrimpSprite(tick), s.x + (flip ? -10 : 10), s.y + 3, flip, 0.18, 48);
+        drawBlocks(shrimpSprite(tick + index * 6), s.x, s.y, flip, 1, 48);
+      }
+
+      function drawDanger(d) {
+        const spikes = [
+          { x: -7, y: -2, w: 14, h: 4, c: colors.ink },
+          { x: -2, y: -7, w: 4, h: 14, c: colors.ink },
+          { x: -6, y: -6, w: 12, h: 12, c: colors.ink2 },
+          { x: -4, y: -4, w: 8, h: 8, c: "#6f4f8f" },
+          { x: -2, y: -2, w: 3, h: 3, c: "#b99be0" },
+        ];
+        drawBlocks(spikes, d.x, d.y);
+      }
+
+      function drawFish() {
+        const tail = Math.sin(tick * 0.18) * (3 + Math.min(3, Math.abs(fish.vx) * 5));
+        const blink = fish.invincible > 0 && Math.floor(fish.invincible / 5) % 2 === 0;
+        drawBlocks(fishSprite(fish.mouth, tail), fish.x, fish.y, fish.dir < 0, blink ? 0.48 : 1);
+        if (fish.mouth > 0.05) {
+          const streamX = fish.dir > 0 ? fish.x + 152 : fish.x - 18;
+          drawBlocks(
+            [
+              { x: 0, y: 0, w: 13, h: 4, c: colors.light },
+              { x: 15, y: -2, w: 18, h: 7, c: colors.light },
+              { x: 36, y: 2, w: 10, h: 2, c: colors.light },
+            ],
+            streamX,
+            fish.y + 36,
+            fish.dir < 0,
+            fish.mouth * 0.5,
+          );
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        drawBackground();
+        for (const b of bubbles) {
+          block(b.x, b.y, b.size, b.size, colors.light, clamp(b.life / 80, 0, 0.8));
+          block(b.x + b.size - 1, b.y + 1, 1, b.size, colors.ink2, 0.28);
+        }
+        for (const d of dangers) drawDanger(d);
+        shrimps.forEach(drawShrimp);
+        drawFish();
+        for (const p of particles) block(p.x, p.y, 2, 2, p.c, clamp(p.life / 30, 0, 1));
+        block(0, 0, W, H, "rgba(7, 38, 54, 0.08)", 0.65 + Math.sin(tick * 0.03) * 0.08);
+      }
+
+      function loop(now) {
+        if (!running) return;
+        const dt = Math.min(2, (now - last) / 16.67 || 1);
+        last = now;
+        if (!paused) update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function startGame() {
+        running = true;
+        paused = false;
+        last = performance.now();
+        score = 0;
+        combo = 0;
+        oxygen = 100;
+        spawnTimer = 0;
+        dangerTimer = 80;
+        shrimps.length = 0;
+        dangers.length = 0;
+        bubbles.length = 0;
+        particles.length = 0;
+        Object.assign(fish, { x: 76, y: 82, vx: 0, vy: 0, dir: 1, mouth: 0, invincible: 0 });
+        overlay.classList.add("hidden");
+        requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        overlay.classList.remove("hidden");
+        overlay.querySelector("h1").textContent = "氧气用完啦";
+        overlay.querySelector("p").textContent = `这局吃到了 ${Math.floor(score / 10)} 份小虾，分数 ${Math.floor(score)}。`;
+        overlay.querySelectorAll("p")[1].textContent = "再来一局，连吃会更高分。";
+        overlayStart.textContent = "重新开始";
+      }
+
+      startBtn.addEventListener("click", startGame);
+      overlayStart.addEventListener("click", startGame);
+      pauseBtn.addEventListener("click", () => {
+        if (!running) return;
+        paused = !paused;
+        pauseBtn.textContent = paused ? "继续" : "暂停";
+      });
+      window.addEventListener("keydown", (event) => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"].includes(event.key)) {
+          event.preventDefault();
+          keys.add(event.key);
+        }
+      });
+      window.addEventListener("keyup", (event) => keys.delete(event.key));
+
+      draw();
+    </script>
+  </body>
+</html>
